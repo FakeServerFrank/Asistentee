@@ -1,89 +1,45 @@
 package com.nova.asistente
 
+import android.Manifest
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.view.Gravity
+import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 
 class MainActivity : Activity() {
 
-    private lateinit var status: TextView
-    private lateinit var button: Button
+    private var status: TextView? = null
+    private var mainButton: Button? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setBackgroundColor(Color.parseColor("#0F1220"))
-            setPadding(dp(32), dp(32), dp(32), dp(32))
+        val crash = getSharedPreferences("crash", Context.MODE_PRIVATE).getString("last", null)
+        if (crash != null) {
+            showText("La app se cerró antes por este error:", crash)
+            return
         }
 
-        val orb = TextView(this).apply {
-            background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                colors = intArrayOf(Color.parseColor("#7C5CFF"), Color.parseColor("#27D3FF"))
-                gradientType = GradientDrawable.LINEAR_GRADIENT
-            }
-            layoutParams = LinearLayout.LayoutParams(dp(96), dp(96)).apply {
-                bottomMargin = dp(28)
-            }
+        try {
+            buildUi()
+        } catch (e: Throwable) {
+            showText("No se pudo abrir la pantalla:", e.stackTraceToString())
         }
-
-        val title = TextView(this).apply {
-            text = "Asistente"
-            textSize = 30f
-            setTextColor(Color.WHITE)
-            typeface = Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
-        }
-
-        val subtitle = TextView(this).apply {
-            text = "Una bolita flotante que te ayuda sin salir de lo que estás haciendo."
-            textSize = 15f
-            setTextColor(Color.parseColor("#AEB4CC"))
-            gravity = Gravity.CENTER
-            setPadding(0, dp(8), 0, dp(32))
-        }
-
-        status = TextView(this).apply {
-            textSize = 16f
-            gravity = Gravity.CENTER
-            setPadding(0, 0, 0, dp(20))
-        }
-
-        button = Button(this).apply {
-            setTextColor(Color.WHITE)
-            isAllCaps = false
-            textSize = 16f
-            background = GradientDrawable().apply {
-                cornerRadius = dp(28).toFloat()
-                setColor(Color.parseColor("#7C5CFF"))
-            }
-            setOnClickListener { openOverlaySettings() }
-        }
-
-        root.addView(orb)
-        root.addView(title)
-        root.addView(subtitle)
-        root.addView(status)
-        root.addView(
-            button,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                dp(56)
-            )
-        )
-        setContentView(root)
     }
 
     override fun onResume() {
@@ -91,15 +47,81 @@ class MainActivity : Activity() {
         refreshState()
     }
 
+    private fun buildUi() {
+        val root = LinearLayout(this)
+        root.orientation = LinearLayout.VERTICAL
+        root.gravity = Gravity.CENTER
+        root.setPadding(dp(28), dp(28), dp(28), dp(28))
+
+        val orb = View(this)
+        orb.background = orbDrawable()
+        val orbParams = LinearLayout.LayoutParams(dp(72), dp(72))
+        orbParams.bottomMargin = dp(16)
+        root.addView(orb, orbParams)
+
+        val title = TextView(this)
+        title.text = "Asistente"
+        title.textSize = 26f
+        title.setTextColor(Color.WHITE)
+        title.typeface = Typeface.DEFAULT_BOLD
+        title.gravity = Gravity.CENTER
+        root.addView(title)
+
+        val st = TextView(this)
+        st.textSize = 15f
+        st.gravity = Gravity.CENTER
+        st.setPadding(0, dp(12), 0, dp(16))
+        status = st
+        root.addView(st)
+
+        val mb = makeButton("Activar permiso", "#7C5CFF") { onMainButton() }
+        mainButton = mb
+        root.addView(mb, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(56)))
+
+        val version = TextView(this)
+        version.text = "versión 0.3"
+        version.textSize = 12f
+        version.setTextColor(Color.parseColor("#6B7280"))
+        version.gravity = Gravity.CENTER
+        version.setPadding(0, dp(20), 0, 0)
+        root.addView(version)
+
+        val scroll = ScrollView(this)
+        scroll.isFillViewport = true
+        scroll.setBackgroundColor(Color.parseColor("#0F1220"))
+        scroll.addView(
+            root,
+            ScrollView.LayoutParams(
+                ScrollView.LayoutParams.MATCH_PARENT,
+                ScrollView.LayoutParams.WRAP_CONTENT
+            )
+        )
+        setContentView(scroll)
+    }
+
     private fun refreshState() {
-        if (Settings.canDrawOverlays(this)) {
-            status.text = "Permiso activado ✓"
-            status.setTextColor(Color.parseColor("#4ADE80"))
-            button.text = "Revisar permiso"
+        val st = status ?: return
+        val granted = Settings.canDrawOverlays(this)
+        if (!granted) {
+            st.text = "Primero activa el permiso para mostrarse sobre otras apps"
+            st.setTextColor(Color.parseColor("#FBBF24"))
+            mainButton?.text = "Activar permiso"
+        } else if (BubbleService.running) {
+            st.text = "Bolita activa ✓"
+            st.setTextColor(Color.parseColor("#4ADE80"))
+            mainButton?.text = "Ocultar bolita"
         } else {
-            status.text = "Falta el permiso para mostrarse sobre otras apps"
-            status.setTextColor(Color.parseColor("#FBBF24"))
-            button.text = "Activar permiso"
+            st.text = "Permiso activado ✓"
+            st.setTextColor(Color.parseColor("#4ADE80"))
+            mainButton?.text = "Mostrar bolita"
+        }
+    }
+
+    private fun onMainButton() {
+        if (!Settings.canDrawOverlays(this)) {
+            openOverlaySettings()
+        } else {
+            toggleBubble()
         }
     }
 
@@ -112,6 +134,65 @@ class MainActivity : Activity() {
         )
     }
 
-    private fun dp(value: Int): Int =
-        (value * resources.displayMetrics.density).toInt()
+    private fun toggleBubble() {
+        if (BubbleService.running) {
+            stopService(Intent(this, BubbleService::class.java))
+            BubbleService.running = false
+        } else {
+            if (Build.VERSION.SDK_INT >= 33 &&
+                checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+            }
+            val i = Intent(this, BubbleService::class.java)
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(i) else startService(i)
+            BubbleService.running = true
+            Toast.makeText(this, "Bolita activada: búscala en el borde izquierdo", Toast.LENGTH_LONG).show()
+        }
+        refreshState()
+    }
+
+    // Pantalla de error: muestra el texto para que lo puedas copiar y mandármelo.
+    private fun showText(title: String, body: String) {
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        box.setBackgroundColor(Color.parseColor("#0F1220"))
+        box.setPadding(dp(20), dp(40), dp(20), dp(20))
+
+        val t = TextView(this)
+        t.text = title
+        t.textSize = 18f
+        t.setTextColor(Color.WHITE)
+        t.typeface = Typeface.DEFAULT_BOLD
+        box.addView(t)
+
+        val scroll = ScrollView(this)
+        val tv = TextView(this)
+        tv.text = body
+        tv.textSize = 12f
+        tv.setTextColor(Color.parseColor("#FBBF24"))
+        tv.setTextIsSelectable(true)
+        tv.setPadding(0, dp(12), 0, dp(12))
+        scroll.addView(tv)
+        box.addView(scroll, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
+
+        val copy = makeButton("Copiar error", "#7C5CFF") {
+            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            cm.setPrimaryClip(ClipData.newPlainText("error", body))
+            Toast.makeText(this, "Copiado", Toast.LENGTH_SHORT).show()
+        }
+        val copyParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(52))
+        copyParams.topMargin = dp(10)
+        box.addView(copy, copyParams)
+
+        val go = makeButton("Continuar", "#2563EB") {
+            getSharedPreferences("crash", Context.MODE_PRIVATE).edit().remove("last").apply()
+            recreate()
+        }
+        val goParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(52))
+        goParams.topMargin = dp(10)
+        box.addView(go, goParams)
+
+        setContentView(box)
+    }
 }

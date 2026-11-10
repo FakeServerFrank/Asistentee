@@ -16,6 +16,7 @@ import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -79,7 +80,7 @@ class MainActivity : Activity() {
         root.addView(mb, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(56)))
 
         val version = TextView(this)
-        version.text = "versión 0.3"
+        version.text = "versión 0.4"
         version.textSize = 12f
         version.setTextColor(Color.parseColor("#6B7280"))
         version.gravity = Gravity.CENTER
@@ -91,9 +92,9 @@ class MainActivity : Activity() {
         scroll.setBackgroundColor(Color.parseColor("#0F1220"))
         scroll.addView(
             root,
-            ScrollView.LayoutParams(
-                ScrollView.LayoutParams.MATCH_PARENT,
-                ScrollView.LayoutParams.WRAP_CONTENT
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
             )
         )
         setContentView(scroll)
